@@ -2,4 +2,6 @@ venv/
 .env
 __pycache__/
 *.duckdb
+*.duckdb.wal
 data/
+*.pdf
