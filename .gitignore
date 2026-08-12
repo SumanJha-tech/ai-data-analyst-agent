@@ -3,5 +3,12 @@ venv/
 __pycache__/
 *.duckdb
 *.duckdb.wal
-data/
 *.pdf
+
+data/*
+!data/olist_orders_dataset.csv
+!data/olist_customers_dataset.csv
+!data/olist_order_items_dataset.csv
+!data/olist_products_dataset.csv
+!data/olist_order_payments_dataset.csv
+!data/olist_order_reviews_dataset.csv

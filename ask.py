@@ -1,3 +1,4 @@
+import os
 import re
 import duckdb
 import pandas as pd
@@ -5,13 +6,48 @@ from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# On Streamlit Community Cloud there is no .env file — the API key is set via
+# the app's "Secrets" panel instead, which only reaches st.secrets, not the
+# OS environment. Bridge it across so genai.Client() (which only reads env
+# vars) can find it either way.
+try:
+    import streamlit as st
+    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        if key not in os.environ and key in st.secrets:
+            os.environ[key] = st.secrets[key]
+except Exception:
+    pass
+
 client = genai.Client()
 con = duckdb.connect("olist.duckdb")
 
-MODEL = "antigravity"
+MODEL = "gemini-3.6-flash"
 
 # Tables the app ships with by default. Uploaded files are added on top of this.
 DEFAULT_TABLES = ["orders", "customers", "order_items", "products", "payments", "reviews"]
+DEFAULT_DATA_FILES = {
+    "orders": "data/olist_orders_dataset.csv",
+    "customers": "data/olist_customers_dataset.csv",
+    "order_items": "data/olist_order_items_dataset.csv",
+    "products": "data/olist_products_dataset.csv",
+    "payments": "data/olist_order_payments_dataset.csv",
+    "reviews": "data/olist_order_reviews_dataset.csv",
+}
+
+
+def ensure_default_tables_loaded():
+    """Builds the 6 default tables from the CSVs if they're missing — needed
+    on a fresh deploy (e.g. Streamlit Cloud) where olist.duckdb starts empty
+    because load_Data.py was never run there."""
+    existing = set(con.execute("SHOW TABLES").fetchdf()["name"].tolist())
+    if set(DEFAULT_TABLES).issubset(existing):
+        return
+    for name, path in DEFAULT_DATA_FILES.items():
+        con.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM read_csv_auto('{path}')")
+
+
+ensure_default_tables_loaded()
 
 
 def get_schema_from_db(con, table_filter=None):
