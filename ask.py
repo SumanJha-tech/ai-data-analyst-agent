@@ -1,9 +1,13 @@
+import logging
 import os
 import re
 import duckdb
 import pandas as pd
-from google import genai
 from dotenv import load_dotenv
+
+from gemini_client import call_gemini, GeminiError, PRIMARY_MODEL
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -19,10 +23,9 @@ try:
 except Exception:
     pass
 
-client = genai.Client()
 con = duckdb.connect("olist.duckdb")
 
-MODEL = "gemini-3.6-flash"
+MODEL = PRIMARY_MODEL
 
 # Tables the app ships with by default. Uploaded files are added on top of this.
 DEFAULT_TABLES = ["orders", "customers", "order_items", "products", "payments", "reviews"]
@@ -105,14 +108,15 @@ Write ONE SQL query (DuckDB syntax) to answer: "{question}"
 Reply with ONLY the SQL query, no explanation, no markdown formatting.
 {error_feedback}"""
 
-        response = client.models.generate_content(model=MODEL, contents=prompt)
-        sql = response.text.strip().strip("`").replace("sql\n", "")
+        # Network retry + model fallback live in call_gemini; the loop here
+        # only retries when the generated SQL itself fails to run.
+        sql = call_gemini(prompt, model=MODEL).strip("`").replace("sql\n", "")
 
         try:
             result = con.execute(sql).fetchdf()
             return sql, clean_dataframe(result)
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
+            logger.warning("SQL attempt %d failed: %s", attempt + 1, e)
             error_feedback = f"\nYour previous query failed with this error: {e}\nPlease fix it."
 
     raise Exception("Could not generate a working SQL query after retries.")
@@ -158,8 +162,7 @@ Here is the result data:
 
 Write a short 2-3 sentence business insight explaining what this shows. Be specific with numbers."""
 
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    return response.text.strip()
+    return call_gemini(prompt, model=MODEL)
 
 
 def _zscore_outliers(series, threshold=2.5):
@@ -237,8 +240,13 @@ anomalies here — things a manager should actually worry about (e.g. unusually 
 suspicious payment amounts, extreme delivery delays). Skip anything that looks like normal,
 harmless spread in the data. Be concise and use numbers."""
 
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    return top_findings, response.text.strip()
+    try:
+        narrative = call_gemini(prompt, model=MODEL)
+    except GeminiError:
+        # The statistics are real and already computed; show them without the AI write-up.
+        narrative = ("The AI summary is unavailable right now. Here are the raw statistical findings in the meantime:\n"
+                     + "\n".join(f"• {line[2:]}" for line in findings_text.splitlines()[:5]))
+    return top_findings, narrative
 
 
 def _sanitize_table_name(filename):

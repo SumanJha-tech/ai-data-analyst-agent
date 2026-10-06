@@ -1,8 +1,19 @@
+import logging
+
 import streamlit as st
 from ask import (
     ask_question, validate_result, auto_chart, generate_insight, con,
-    detect_anomalies, load_uploaded_file, list_tables, DEFAULT_TABLES
+    detect_anomalies, load_uploaded_file, list_tables, DEFAULT_TABLES, MODEL
 )
+from gemini_client import (
+    GeminiError, GeminiUnavailable, GeminiNotConfigured, check_ai_status,
+    REQUEST_FAILED_MESSAGE
+)
+from demo_mode import (
+    find_demo_answer, suggest_questions, demo_result_frame, demo_chart, DEMO_BADGE
+)
+
+logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="AI Data Analyst Agent",
@@ -122,22 +133,48 @@ def clear_chat():
     st.session_state["chat_history"] = []
 
 
+def demo_scope_ok():
+    """Saved demo answers are about the Olist tables, so only offer them while those are in scope."""
+    return set(DEFAULT_TABLES).issubset(st.session_state["active_tables"])
+
+
 def process_question(question):
     history = [{"question": t["question"], "sql": t["sql"]} for t in st.session_state["chat_history"]]
+    turn = {
+        "question": question, "sql": None, "df": None, "valid": False, "reason": None,
+        "insight": None, "fig": None, "error": None, "demo": False, "suggestions": [],
+    }
+    can_demo = demo_scope_ok()
     try:
         sql, df = ask_question(question, history=history, table_filter=st.session_state["active_tables"])
         is_valid, reason = validate_result(df)
-        insight = generate_insight(question, df, history=history)
-        fig = auto_chart(df)
-        st.session_state["chat_history"].append({
-            "question": question, "sql": sql, "df": df,
-            "valid": is_valid, "reason": reason, "insight": insight, "fig": fig, "error": None
-        })
-    except Exception as e:
-        st.session_state["chat_history"].append({
-            "question": question, "sql": None, "df": None,
-            "valid": False, "reason": None, "insight": None, "fig": None, "error": str(e)
-        })
+        try:
+            insight = generate_insight(question, df, history=history)
+        except GeminiError as e:
+            logger.warning("Insight unavailable: %s", e.technical_detail)
+            insight = None  # the query result is still real; only the AI write-up is missing
+        turn.update(sql=sql, df=df, valid=is_valid, reason=reason, insight=insight, fig=auto_chart(df))
+    except (GeminiUnavailable, GeminiNotConfigured) as e:
+        entry = find_demo_answer(question) if can_demo else None
+        if entry:
+            df = demo_result_frame(entry)
+            is_valid, reason = validate_result(df)
+            turn.update(sql=entry["sql"], df=df, valid=is_valid, reason=reason,
+                        insight=entry["insight"], fig=demo_chart(df, entry["chart_type"]), demo=True)
+        else:
+            turn.update(error=str(e), suggestions=suggest_questions(4, exclude=question) if can_demo else [])
+    except GeminiError as e:
+        turn.update(error=str(e), suggestions=suggest_questions(4, exclude=question) if can_demo else [])
+    except Exception:
+        logger.exception("Could not answer question")
+        turn.update(error=REQUEST_FAILED_MESSAGE, suggestions=suggest_questions(4, exclude=question) if can_demo else [])
+    st.session_state["chat_history"].append(turn)
+
+
+# One tiny live check at most every 60s (shared across sessions), not on every rerun.
+@st.cache_data(ttl=60, show_spinner=False)
+def get_ai_status():
+    return check_ai_status(MODEL)
 
 
 @st.cache_data
@@ -193,6 +230,15 @@ st.markdown("""
         font-size: 0.78rem; font-weight: 600;
         padding: 0.35rem 0.75rem; border-radius: 999px;
         margin-bottom: 1.3rem; border: 1px solid rgba(22,163,74,0.22);
+    }
+    .ai-badge.warn {
+        background: rgba(217,119,6,0.10); color: #b45309; border-color: rgba(217,119,6,0.28);
+    }
+    .ai-badge.warn .pulse-dot { background: #d97706; animation: none; }
+    .demo-badge {
+        display: inline-block; background: rgba(217,119,6,0.10); color: #b45309;
+        border: 1px solid rgba(217,119,6,0.28); border-radius: 999px;
+        padding: 0.15rem 0.65rem; font-size: 0.74rem; font-weight: 600; margin-bottom: 0.5rem;
     }
     .pulse-dot {
         width: 7px; height: 7px; background: #22c55e; border-radius: 50%;
@@ -310,7 +356,12 @@ st.markdown("""
 with st.sidebar:
     st.markdown('<div class="brand-row"><div class="brand-mark">📊</div><span class="sidebar-brand">AI Data Analyst</span></div>', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-sub">TEXT-TO-SQL · GEMINI-POWERED</p>', unsafe_allow_html=True)
-    st.markdown('<div class="ai-badge"><span class="pulse-dot"></span> Gemini AI Ready</div>', unsafe_allow_html=True)
+    ai_status = get_ai_status()
+    if ai_status == "ready":
+        st.markdown('<div class="ai-badge"><span class="pulse-dot"></span> Gemini AI Ready</div>', unsafe_allow_html=True)
+    else:
+        badge_text = "AI not configured, demo mode" if ai_status == "not_configured" else "AI busy, demo mode"
+        st.markdown(f'<div class="ai-badge warn"><span class="pulse-dot"></span> {badge_text}</div>', unsafe_allow_html=True)
 
     st.radio(
         "Navigate",
@@ -403,13 +454,18 @@ elif st.session_state["page"] == "💬 Chat Analyst":
     if not st.session_state["chat_history"]:
         st.info("No conversation yet — ask a question below to get started.")
 
-    for turn in st.session_state["chat_history"]:
+    for turn_idx, turn in enumerate(st.session_state["chat_history"]):
         with st.chat_message("user"):
             st.markdown(turn["question"])
         with st.chat_message("assistant", avatar="📊"):
             if turn["error"]:
-                st.markdown(f'<p class="status-err">✗ {turn["error"]}</p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="status-warn">⚠ {turn["error"]}</p>', unsafe_allow_html=True)
+                for i, suggestion in enumerate(turn.get("suggestions", [])):
+                    st.button(suggestion, key=f"sug_{turn_idx}_{i}", on_click=go_to_chat_with, args=(suggestion,))
                 continue
+
+            if turn.get("demo"):
+                st.markdown(f'<span class="demo-badge">{DEMO_BADGE}</span>', unsafe_allow_html=True)
 
             if turn["valid"]:
                 st.markdown(f'<p class="status-ok">✓ {turn["reason"]}</p>', unsafe_allow_html=True)
@@ -434,7 +490,10 @@ elif st.session_state["page"] == "💬 Chat Analyst":
                 else:
                     st.info("No chart available for this result shape.")
 
-            st.markdown(f'<div class="insight-box">🤖 {turn["insight"]}</div>', unsafe_allow_html=True)
+            if turn["insight"]:
+                st.markdown(f'<div class="insight-box">🤖 {turn["insight"]}</div>', unsafe_allow_html=True)
+            else:
+                st.caption("The AI summary isn't available right now, but the data above is live.")
 
     question = st.chat_input("Ask a question about the data...")
     if question:

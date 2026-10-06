@@ -12,3 +12,4 @@ data/*
 !data/olist_products_dataset.csv
 !data/olist_order_payments_dataset.csv
 !data/olist_order_reviews_dataset.csv
+!data/demo_answers.json

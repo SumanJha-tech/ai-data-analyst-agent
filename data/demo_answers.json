@@ -1,0 +1,193 @@
+[
+  {
+    "question": "Which product category had the highest total revenue?",
+    "sql": "SELECT p.product_category_name AS category, ROUND(SUM(oi.price), 2) AS total_revenue\nFROM order_items oi JOIN products p ON p.product_id = oi.product_id\nWHERE p.product_category_name IS NOT NULL\nGROUP BY category ORDER BY total_revenue DESC LIMIT 1",
+    "result": [
+      {
+        "category": "beleza_saude",
+        "total_revenue": 1258681.34
+      }
+    ],
+    "chart_type": "none",
+    "insight": "beleza saude is the top category with R$ 1,258,681 in item sales, about 9.3% of all item revenue. Revenue is spread across many categories rather than concentrated in one."
+  },
+  {
+    "question": "What is the average delivery time in days?",
+    "sql": "SELECT ROUND(AVG(date_diff('second', order_purchase_timestamp, order_delivered_customer_date) / 86400.0), 1) AS avg_delivery_days\nFROM orders WHERE order_delivered_customer_date IS NOT NULL",
+    "result": [
+      {
+        "avg_delivery_days": 12.6
+      }
+    ],
+    "chart_type": "none",
+    "insight": "Delivered orders take 12.6 days on average from purchase to the customer's door. That is faster than the 23.7-day average promised at checkout, so Olist typically beats its own estimates."
+  },
+  {
+    "question": "Which state has the most delayed deliveries?",
+    "sql": "SELECT c.customer_state AS state, COUNT(*) AS delayed_orders\nFROM orders o JOIN customers c ON c.customer_id = o.customer_id\nWHERE o.order_delivered_customer_date > o.order_estimated_delivery_date\nGROUP BY state ORDER BY delayed_orders DESC LIMIT 5",
+    "result": [
+      {
+        "state": "SP",
+        "delayed_orders": 2387
+      },
+      {
+        "state": "RJ",
+        "delayed_orders": 1664
+      },
+      {
+        "state": "MG",
+        "delayed_orders": 638
+      },
+      {
+        "state": "BA",
+        "delayed_orders": 457
+      },
+      {
+        "state": "RS",
+        "delayed_orders": 382
+      }
+    ],
+    "chart_type": "pie",
+    "insight": "SP has the most late deliveries (2,387), followed by RJ (1,664). Across all states 7,827 orders arrived after the estimated date, and the largest markets naturally account for the biggest share of them."
+  },
+  {
+    "question": "What is the most common payment type?",
+    "sql": "SELECT payment_type, COUNT(*) AS payments\nFROM payments GROUP BY payment_type ORDER BY payments DESC",
+    "result": [
+      {
+        "payment_type": "credit_card",
+        "payments": 76795
+      },
+      {
+        "payment_type": "boleto",
+        "payments": 19784
+      },
+      {
+        "payment_type": "voucher",
+        "payments": 5775
+      },
+      {
+        "payment_type": "debit_card",
+        "payments": 1529
+      },
+      {
+        "payment_type": "not_defined",
+        "payments": 3
+      }
+    ],
+    "chart_type": "pie",
+    "insight": "Credit Card is the most common payment type with 76,795 payments, 73.9% of all 103,886. Boleto (a Brazilian bank slip) is the clear second choice with 19,784."
+  },
+  {
+    "question": "How many orders have a review score of 1 or 2?",
+    "sql": "SELECT COUNT(DISTINCT order_id) AS orders_with_low_score\nFROM reviews WHERE review_score IN (1, 2)",
+    "result": [
+      {
+        "orders_with_low_score": 14533
+      }
+    ],
+    "chart_type": "none",
+    "insight": "14,533 orders received a review score of 1 or 2, which is 14.7% of the 98,673 reviewed orders. These unhappy customers are the natural starting point for improving delivery and product quality."
+  },
+  {
+    "question": "What are the top 5 product categories by total revenue?",
+    "sql": "SELECT p.product_category_name AS category, ROUND(SUM(oi.price), 2) AS total_revenue\nFROM order_items oi JOIN products p ON p.product_id = oi.product_id\nWHERE p.product_category_name IS NOT NULL\nGROUP BY category ORDER BY total_revenue DESC LIMIT 5",
+    "result": [
+      {
+        "category": "beleza_saude",
+        "total_revenue": 1258681.34
+      },
+      {
+        "category": "relogios_presentes",
+        "total_revenue": 1205005.68
+      },
+      {
+        "category": "cama_mesa_banho",
+        "total_revenue": 1036988.68
+      },
+      {
+        "category": "esporte_lazer",
+        "total_revenue": 988048.97
+      },
+      {
+        "category": "informatica_acessorios",
+        "total_revenue": 911954.32
+      }
+    ],
+    "chart_type": "pie",
+    "insight": "The five biggest categories bring in R$ 5,400,679 together, about 39.7% of all item revenue. beleza saude leads, with relogios presentes close behind."
+  },
+  {
+    "question": "What is the total revenue from all orders?",
+    "sql": "SELECT ROUND(SUM(payment_value), 2) AS total_revenue FROM payments",
+    "result": [
+      {
+        "total_revenue": 16008872.12
+      }
+    ],
+    "chart_type": "none",
+    "insight": "Customers paid a total of R$ 16,008,872 across 99,440 paid orders. That works out to about R$ 161 per order."
+  },
+  {
+    "question": "What is the average review score?",
+    "sql": "SELECT ROUND(AVG(review_score), 2) AS avg_review_score FROM reviews",
+    "result": [
+      {
+        "avg_review_score": 4.09
+      }
+    ],
+    "chart_type": "none",
+    "insight": "The average review score is 4.09 out of 5 across 99,224 reviews. 57.8% of reviews are a perfect 5, so satisfaction is strong overall, with a tail of unhappy customers."
+  },
+  {
+    "question": "How many orders were delivered late?",
+    "sql": "SELECT COUNT(*) AS late_orders FROM orders o WHERE o.order_delivered_customer_date > o.order_estimated_delivery_date",
+    "result": [
+      {
+        "late_orders": 7827
+      }
+    ],
+    "chart_type": "none",
+    "insight": "7,827 orders were delivered after the estimated date, about 8.1% of the 96,476 delivered orders. In other words, the large majority of orders arrive on time or early."
+  },
+  {
+    "question": "How many orders fall into each order status?",
+    "sql": "SELECT order_status, COUNT(*) AS orders\nFROM orders GROUP BY order_status ORDER BY orders DESC",
+    "result": [
+      {
+        "order_status": "delivered",
+        "orders": 96478
+      },
+      {
+        "order_status": "shipped",
+        "orders": 1107
+      },
+      {
+        "order_status": "canceled",
+        "orders": 625
+      },
+      {
+        "order_status": "unavailable",
+        "orders": 609
+      },
+      {
+        "order_status": "invoiced",
+        "orders": 314
+      },
+      {
+        "order_status": "processing",
+        "orders": 301
+      },
+      {
+        "order_status": "created",
+        "orders": 5
+      },
+      {
+        "order_status": "approved",
+        "orders": 2
+      }
+    ],
+    "chart_type": "pie",
+    "insight": "96,478 of 99,441 orders (97.0%) have been delivered. Only 625 were canceled, so cancellations are a very small part of the business."
+  }
+]

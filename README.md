@@ -157,3 +157,22 @@ The app opens at `http://localhost:8501`.
 - Building a stateful, multi-page interactive UI in Streamlit
 - Diagnosing and fixing a real production deployment failure
 - Structuring and deploying a public GitHub repo with proper secret management
+
+---
+
+## Reliability
+
+The app is built to keep working when Gemini is slow, overloaded or unavailable. Users never see a raw API error; the technical details go to the server log only.
+
+- **Retry with backoff.** Every Gemini call goes through one helper, `call_gemini` in `gemini_client.py`. Transient failures (503, 429, 500, `UNAVAILABLE`, `RESOURCE_EXHAUSTED`, timeouts, connection errors) are retried 3 times with exponential backoff and jitter (about 1s, 3s, 7s). Permanent errors (400, invalid or missing API key, safety blocks) are not retried. The separate "re-generate the SQL if it fails to run, max 2 attempts" logic in `ask.py` is unchanged.
+- **Fallback model.** If the primary model still fails after its retries, the helper tries the model named in `GEMINI_FALLBACK_MODEL` (environment variable or `st.secrets`). It is only used if it appears in the model list for your API key; it is never hardcoded.
+- **Friendly errors.** An overloaded AI shows "The AI is busy right now..."; a missing or rejected key shows "The AI service is not configured." The key is never printed or logged.
+- **Demo mode.** When Gemini is unavailable (or no key is set), questions that match a saved one are answered from `data/demo_answers.json` with a "Demo answer (live AI unavailable)" badge. These are real results: `python scripts/build_demo_answers.py` runs each query against DuckDB and regenerates the file, including the insight text. Unmatched questions get the friendly message plus clickable demo questions. The "Try one of these" buttons work in demo mode. The Anomaly Radar still shows its real statistical findings without the AI write-up.
+- **Honest status badge.** The sidebar badge shows "Gemini AI Ready" only if a tiny live check succeeds, otherwise "AI busy, demo mode" (amber). The check is cached for 60 seconds, not run on every rerun.
+
+Run the tests (Gemini is mocked; no API calls) with:
+
+```
+pip install -r requirements-dev.txt
+pytest
+```
