@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30992431/README.md)
 # 📊 AI Data Analyst Agent
 
 Ask a business question in plain English. Get back a validated SQL query, a result table, an auto-picked chart, and a written insight — in seconds, with no SQL knowledge required.
