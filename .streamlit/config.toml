@@ -1,6 +1,21 @@
 [theme]
-base = "light"
-primaryColor = "#d97706"
-backgroundColor = "#fbf7ee"
-secondaryBackgroundColor = "#fffaf0"
-textColor = "#3d3425"
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#0e1116"
+secondaryBackgroundColor = "#151a21"
+textColor = "#e6e9ef"
+linkColor = "#6ea8fe"
+borderColor = "#262d38"
+codeBackgroundColor = "#0b0e13"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+
+greenColor = "#34d399"
+orangeColor = "#f5a524"
+redColor = "#f87171"
+blueColor = "#60a5fa"
+
+chartCategoricalColors = ["#3b82f6", "#2dd4bf", "#f5a524", "#a78bfa", "#f472b6", "#94a3b8", "#34d399"]
+dataframeBorderColor = "#262d38"
+dataframeHeaderBackgroundColor = "#1a212b"
