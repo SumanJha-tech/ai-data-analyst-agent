@@ -6,3 +6,4 @@ pandas
 plotly
 openpyxl
 fpdf2
+httpx
